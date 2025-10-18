@@ -8,7 +8,7 @@ import { SensorConfigDialog } from '@front/features/sensor/sensor-dialog'
 import { SensorPanel } from '@front/features/sensor/sensor-panel'
 
 const SensorsPanel = () => {
-	const { isConnected, receivedData, sendCommand } = useDevice()
+	const { isConnected, receivedData, commandClient } = useDevice()
 	const [sensorDialogOpen, setSensorDialogOpen] = useState(false)
 	const [selectedSensor, setSelectedSensor] = useState<number>(0)
 
@@ -19,13 +19,7 @@ const SensorsPanel = () => {
 	}
 
 	const handleSensorSave = (sensorIndex: number, bound: number, reaction: number) => {
-		const marginHex = Math.round(bound * 16)
-			.toString(16)
-			.padStart(4, '0')
-			.toUpperCase()
-		const reactionHex = reaction.toString(16).toUpperCase()
-		const command = `M${sensorIndex}${marginHex}${reactionHex}\r`
-		sendCommand(command)
+		commandClient.setSensorBound(sensorIndex, bound, reaction)
 	}
 
 	const sensorValues = receivedData?.SensorValue || []

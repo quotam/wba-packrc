@@ -19,21 +19,18 @@ import { SuperModal } from '@front/shared/ui/superModal'
 const Form = ({ close }: { close: () => void }) => {
 	const [forceControlEnabled, setForceControlEnabled] = useState(false)
 	const [forceSensorNo, setForceSensorNo] = useState(0)
-	const [forceBound, setForceBound] = useState('100.00')
+	const [forceBound, setForceBound] = useState(100.0)
 
 	const [targetVoltage, setTargetVoltage] = useState(0)
 
-	const { isConnected, sendCommand, receivedData: data } = useDevice()
+	const { isConnected, commandClient, receivedData: data } = useDevice()
 
 	const applyForceControl = async () => {
 		if (!isConnected) return
-		const tempValue = Math.round(Number.parseFloat(forceBound) * 16)
-		const tempHex = tempValue.toString(16).toUpperCase().padStart(4, '0')
-		const command = `Y${forceControlEnabled ? '1' : '0'}${forceControlEnabled ? forceSensorNo : ''}${forceControlEnabled ? tempHex : ''}\r`
+		await commandClient.toggleForceControl(forceBound, forceControlEnabled, forceSensorNo)
 
-		await sendCommand(command)
 		if (targetVoltage > 0 && targetVoltage !== data?.TargetV) {
-			await sendCommand(`T${targetVoltage.toString(16).padStart(4, '0')}\r`)
+			await commandClient.setTargetVoltage(targetVoltage)
 		}
 
 		close()
@@ -42,9 +39,15 @@ const Form = ({ close }: { close: () => void }) => {
 	const handleForceBoundChange = (value: string) => {
 		const filtered = value.replace(/[^\d.-]/g, '')
 
-		if (filtered.length <= 6) {
-			setForceBound(filtered)
+		const numValue = parseFloat(filtered)
+
+		if (!isNaN(numValue) && filtered.length <= 6) {
+			setForceBound(numValue)
 		}
+	}
+
+	const formatForceBound = (value: number): string => {
+		return value.toFixed(2)
 	}
 
 	useEffect(() => {
@@ -56,7 +59,7 @@ const Form = ({ close }: { close: () => void }) => {
 				setForceSensorNo(data.HeatControlSensorNo)
 			}
 			if (data.HeatControlValue !== undefined) {
-				const temp = (data.HeatControlValue / 16).toFixed(2)
+				const temp = data.HeatControlValue / 16
 				setForceBound(temp)
 			}
 			if (data.TargetV) setTargetVoltage(data.TargetV * 10)
@@ -106,7 +109,7 @@ const Form = ({ close }: { close: () => void }) => {
 					<Input
 						id="force-bound"
 						type="text"
-						value={forceBound}
+						value={formatForceBound(forceBound)}
 						onChange={e => handleForceBoundChange(e.target.value)}
 						disabled={!isConnected || !forceControlEnabled}
 						className="h-9 font-mono"

@@ -10,10 +10,10 @@ import { ForceControlDialog } from './dialog/force-control-dialog'
 import HeatStatus from './ui/heat-status'
 
 export function StabilizerControl() {
-	const { receivedData: data, sendCommand, isConnected } = useDevice()
+	const { receivedData: data, commandClient, isConnected } = useDevice()
 	const [dialogOpen, setDialogOpen] = useState(false)
 
-	const onModeChange = (mode: number) => sendCommand(`U${mode}\r`)
+	const onModeChange = (mode: number) => commandClient.setStabilizerMode(mode)
 	// const { settings } = useAppSettings()
 
 	const stabMode = data?.StabModeNo ?? 2

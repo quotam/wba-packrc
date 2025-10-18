@@ -9,12 +9,12 @@ import { Droplets, Play, Square } from 'lucide-react'
 import { PumpControlDialog } from './dialog/pump-control-dialog'
 
 export function PumpControl() {
-	const { isConnected, sendCommand, receivedData: data } = useDevice()
+	const { isConnected, commandClient, receivedData: data } = useDevice()
 
 	const [dialogOpen, setDialogOpen] = useState(false)
 
-	const onStart = () => sendCommand('R0\r'),
-		onReset = () => sendCommand('Z1\r')
+	const onStart = () => commandClient.startPump(),
+		onReset = () => commandClient.resetTotalCounter()
 
 	const rate = data?.Rate ?? 0
 	const total = data?.Total ?? 0

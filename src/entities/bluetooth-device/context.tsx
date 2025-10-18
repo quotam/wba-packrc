@@ -1,9 +1,10 @@
 'use client'
 
-import { type ReactNode, createContext, useContext } from 'react'
+import { type ReactNode, createContext, useContext, useMemo } from 'react'
 
 import { ReceivedData } from '@front/kernel/domain/types'
 
+import { DeviceCommandClient } from './command-client'
 import { useBluetoothDevice } from './use-bluetooth-device'
 
 interface BluetoothContextValue {
@@ -11,17 +12,23 @@ interface BluetoothContextValue {
 	device: BluetoothDevice | null
 	connect: () => Promise<void>
 	disconnect: () => Promise<void>
-	sendCommand: (command: string) => Promise<void>
 	receivedData: ReceivedData | null
 	connectionStatus: string
+	commandClient: DeviceCommandClient
 }
 
 const BluetoothContext = createContext<BluetoothContextValue | null>(null)
 
 export function BluetoothProvider({ children }: { children: ReactNode }) {
-	const bluetooth = useBluetoothDevice()
+	const { sendCommand, ...bluetooth } = useBluetoothDevice()
 
-	return <BluetoothContext.Provider value={bluetooth}>{children}</BluetoothContext.Provider>
+	const commandClient = useMemo(() => new DeviceCommandClient(sendCommand), [sendCommand])
+
+	return (
+		<BluetoothContext.Provider value={{ ...bluetooth, commandClient }}>
+			{children}
+		</BluetoothContext.Provider>
+	)
 }
 
 export function useDevice() {

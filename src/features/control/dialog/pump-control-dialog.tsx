@@ -7,7 +7,7 @@ import { Label } from '@front/shared/ui/label'
 import { SuperModal } from '@front/shared/ui/superModal'
 
 const Form = () => {
-	const { sendCommand, isConnected, receivedData: data, connectionStatus } = useDevice()
+	const { commandClient, isConnected, receivedData: data, connectionStatus } = useDevice()
 
 	const [newStepsFor100, setNewStepsFor100] = useState<number>(0)
 
@@ -22,14 +22,13 @@ const Form = () => {
 	}, [])
 
 	const handleSetSteps = () => {
-		const hexValue = newStepsFor100.toString(16).toUpperCase().padStart(8, '0')
-		sendCommand(`Z1${hexValue}\r`)
+		commandClient.pumpCalibrate(newStepsFor100)
 	}
 
 	useEffect(() => {
 		if (!isConnected) return
-		sendCommand('Z0\r')
-	}, [isConnected, sendCommand, connectionStatus])
+		commandClient.sendZ0()
+	}, [isConnected, commandClient, connectionStatus])
 
 	const rate = data?.Rate ?? 0
 	const dose = data?.Dose ?? 0
@@ -38,18 +37,17 @@ const Form = () => {
 	const handleRateSubmit = () => {
 		const value = Number.parseInt(rateInput)
 		if (!isNaN(value) && value >= 0 && value <= 3600) {
-			sendCommand(`P${value.toString(16).padStart(4, '0')}\r`)
+			commandClient.setPumpRate(value)
 			setRateInput('')
 		}
 	}
 
 	const handleDoseSubmit = () => {
 		const value = Number.parseInt(doseInput)
-		if (!isNaN(value) && value >= 0 && value <= 9999) {
-			sendCommand(`V${value.toString(16).padStart(4, '0')}\r`)
-			setDoseInput('')
-		}
+		commandClient.setPumpRate(value)
+		setDoseInput('')
 	}
+
 	return (
 		<div className="space-y-5">
 			{/* Rate Control */}

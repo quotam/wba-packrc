@@ -168,8 +168,7 @@ export function useBluetoothDevice() {
 						return discovered
 					}
 				} catch (error) {
-					// Service not available, try next
-					console.log(`Service ${serviceUuid} not available`)
+					console.log(`Service ${serviceUuid} not available`, error)
 				}
 			}
 
