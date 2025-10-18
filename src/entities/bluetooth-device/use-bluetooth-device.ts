@@ -6,11 +6,19 @@ import { ReceivedData } from '@front/kernel/domain/types'
 
 import { parsePacket } from './parser'
 
-const SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb'
-const TX_CHARACTERISTIC_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb'
-const RX_CHARACTERISTIC_UUID = '0000ffe2-0000-1000-8000-00805f9b34fb'
-
 const UI_UPDATE_THROTTLE_MS = 100 // Update UI max 10 times per second
+
+const COMMON_SERIAL_SERVICES = [
+	'0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10, HC-08 modules
+	'6e400001-b5a3-f393-e0a9-e50e24dcca9e', // Nordic UART Service
+	'49535343-fe7d-4ae5-8fa9-9fafd205e455' // Microchip Transparent UART
+]
+
+interface DiscoveredCharacteristics {
+	service: BluetoothRemoteGATTService
+	txChar: BluetoothRemoteGATTCharacteristic // For receiving data (notify)
+	rxChar: BluetoothRemoteGATTCharacteristic // For sending data (write)
+}
 
 export function useBluetoothDevice() {
 	const [isConnected, setIsConnected] = useState(false)
@@ -83,7 +91,7 @@ export function useBluetoothDevice() {
 				bufferRef.current = ''
 			}
 		},
-		[parsePacket, updateReceivedData]
+		[updateReceivedData]
 	)
 
 	const handleDisconnect = useCallback(() => {
@@ -101,13 +109,103 @@ export function useBluetoothDevice() {
 		pendingDataRef.current = null
 	}, [])
 
+	const discoverSerialCharacteristics = useCallback(
+		async (service: BluetoothRemoteGATTService): Promise<DiscoveredCharacteristics | null> => {
+			try {
+				const characteristics = await service.getCharacteristics()
+				console.log(`Service ${service.uuid} has ${characteristics.length} characteristics`)
+
+				let txChar: BluetoothRemoteGATTCharacteristic | null = null
+				let rxChar: BluetoothRemoteGATTCharacteristic | null = null
+
+				// Look for characteristics with the right properties
+				for (const char of characteristics) {
+					console.log(`Characteristic ${char.uuid}:`, {
+						notify: char.properties.notify,
+						write: char.properties.write,
+						writeWithoutResponse: char.properties.writeWithoutResponse
+					})
+
+					// TX characteristic: should support notify (for receiving data)
+					if (char.properties.notify && !txChar) {
+						txChar = char
+						console.log(`Found TX (notify) characteristic: ${char.uuid}`)
+					}
+
+					// RX characteristic: should support write (for sending data)
+					if ((char.properties.write || char.properties.writeWithoutResponse) && !rxChar) {
+						rxChar = char
+						console.log(`Found RX (write) characteristic: ${char.uuid}`)
+					}
+				}
+
+				if (txChar && rxChar) {
+					console.log('Successfully discovered serial characteristics')
+					return { service, txChar, rxChar }
+				}
+
+				return null
+			} catch (error) {
+				console.error(`Error discovering characteristics for service ${service.uuid}:`, error)
+				return null
+			}
+		},
+		[]
+	)
+
+	const autoDiscoverSerialService = useCallback(
+		async (server: BluetoothRemoteGATTServer): Promise<DiscoveredCharacteristics | null> => {
+			console.log('Starting auto-discovery of serial service...')
+
+			// First, try common serial service UUIDs
+			for (const serviceUuid of COMMON_SERIAL_SERVICES) {
+				try {
+					console.log(`Trying known serial service: ${serviceUuid}`)
+					const service = await server.getPrimaryService(serviceUuid)
+					const discovered = await discoverSerialCharacteristics(service)
+					if (discovered) {
+						console.log(`Found working serial service: ${serviceUuid}`)
+						return discovered
+					}
+				} catch (error) {
+					// Service not available, try next
+					console.log(`Service ${serviceUuid} not available`)
+				}
+			}
+
+			// If common services didn't work, scan all available services
+			console.log('Scanning all available services...')
+			try {
+				const services = await server.getPrimaryServices()
+				console.log(`Found ${services.length} services total`)
+
+				for (const service of services) {
+					console.log(`Checking service: ${service.uuid}`)
+					const discovered = await discoverSerialCharacteristics(service)
+					if (discovered) {
+						console.log(`Found working serial service: ${service.uuid}`)
+						return discovered
+					}
+				}
+			} catch (error) {
+				console.error('Error scanning services:', error)
+			}
+
+			console.error('Could not find suitable serial characteristics')
+			return null
+		},
+		[discoverSerialCharacteristics]
+	)
+
 	const connect = useCallback(async () => {
 		try {
 			setConnectionStatus('Поиск устройства...')
 
 			const device = await navigator.bluetooth.requestDevice({
-				filters: [{ services: [SERVICE_UUID] }],
-				optionalServices: [SERVICE_UUID]
+				// acceptAllDevices: true, // This would show ALL Bluetooth devices
+				// optionalServices: COMMON_SERIAL_SERVICES, // Allow access to these services
+				filters: COMMON_SERIAL_SERVICES.map(uuid => ({ services: [uuid] })),
+				optionalServices: COMMON_SERIAL_SERVICES
 			})
 
 			console.log('Device selected:', device.name, device.id)
@@ -122,52 +220,29 @@ export function useBluetoothDevice() {
 
 			console.log('Connected to GATT server')
 
-			const service = await server.getPrimaryService(SERVICE_UUID)
-			console.log('Got service:', service.uuid)
+			setConnectionStatus('Поиск характеристик...')
+			const discovered = await autoDiscoverSerialService(server)
 
-			const characteristics = await service.getCharacteristics()
-			console.log('Available characteristics:')
-			for (const char of characteristics) {
-				console.log(`  - ${char.uuid}`)
-				console.log(`    Properties:`, {
-					broadcast: char.properties.broadcast,
-					read: char.properties.read,
-					writeWithoutResponse: char.properties.writeWithoutResponse,
-					write: char.properties.write,
-					notify: char.properties.notify,
-					indicate: char.properties.indicate
-				})
+			if (!discovered) {
+				throw new Error('Не удалось найти подходящие характеристики для последовательной связи')
 			}
 
-			const txCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC_UUID)
-			const rxCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC_UUID)
+			const { txChar, rxChar } = discovered
 
-			console.log('TX Characteristic properties:', {
-				read: txCharacteristic.properties.read,
-				write: txCharacteristic.properties.write,
-				writeWithoutResponse: txCharacteristic.properties.writeWithoutResponse,
-				notify: txCharacteristic.properties.notify
+			console.log('Using characteristics:', {
+				tx: txChar.uuid,
+				rx: rxChar.uuid
 			})
 
-			console.log('RX Characteristic properties:', {
-				read: rxCharacteristic.properties.read,
-				write: rxCharacteristic.properties.write,
-				writeWithoutResponse: rxCharacteristic.properties.writeWithoutResponse,
-				notify: rxCharacteristic.properties.notify
-			})
+			txCharacteristicRef.current = txChar
+			rxCharacteristicRef.current = rxChar
 
-			txCharacteristicRef.current = txCharacteristic
-			rxCharacteristicRef.current = rxCharacteristic
-
-			if (txCharacteristic.properties.notify) {
-				await txCharacteristic.startNotifications()
-				txCharacteristic.addEventListener(
-					'characteristicvaluechanged',
-					handleCharacteristicValueChanged
-				)
+			if (txChar.properties.notify) {
+				await txChar.startNotifications()
+				txChar.addEventListener('characteristicvaluechanged', handleCharacteristicValueChanged)
 				console.log('Started notifications on TX characteristic')
 			} else {
-				console.warn('TX characteristic does not support notifications')
+				throw new Error('TX characteristic does not support notifications')
 			}
 
 			setIsConnected(true)
@@ -179,7 +254,7 @@ export function useBluetoothDevice() {
 			setConnectionStatus(`Ошибка: ${error instanceof Error ? error.message : String(error)}`)
 			setIsConnected(false)
 		}
-	}, [handleCharacteristicValueChanged, handleDisconnect])
+	}, [handleCharacteristicValueChanged, handleDisconnect, autoDiscoverSerialService])
 
 	const disconnect = useCallback(async () => {
 		if (device) {
@@ -214,27 +289,22 @@ export function useBluetoothDevice() {
 			const encoder = new TextEncoder()
 			const data = encoder.encode(cmd)
 
-			console.log('Attempting to send command:', cmd.replace('\r', '\\r'))
-			console.log('Command bytes:', Array.from(data))
+			console.log('Sending command:', cmd.replace('\r', '\\r'))
 
 			if (rxCharacteristicRef.current.properties.writeWithoutResponse) {
 				await rxCharacteristicRef.current.writeValueWithoutResponse(data)
-				console.log('Sent command using writeValueWithoutResponse')
+				console.log('Sent using writeValueWithoutResponse')
 			} else if (rxCharacteristicRef.current.properties.write) {
 				await rxCharacteristicRef.current.writeValue(data)
-				console.log('Sent command using writeValue')
+				console.log('Sent using writeValue')
 			} else {
 				console.error('Characteristic does not support write operations')
 				return
 			}
 
-			console.log('Command sent successfully:', cmd.replace('\r', '\\r'))
+			console.log('Command sent successfully')
 		} catch (error) {
 			console.error('Error sending command:', error)
-			console.error('Error details:', {
-				name: error instanceof Error ? error.name : 'Unknown',
-				message: error instanceof Error ? error.message : String(error)
-			})
 		}
 	}, [])
 
