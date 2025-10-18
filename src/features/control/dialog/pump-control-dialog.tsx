@@ -44,7 +44,7 @@ const Form = () => {
 
 	const handleDoseSubmit = () => {
 		const value = Number.parseInt(doseInput)
-		commandClient.setPumpRate(value)
+		commandClient.setDose(value)
 		setDoseInput('')
 	}
 
