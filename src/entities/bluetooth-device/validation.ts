@@ -24,8 +24,8 @@ export function formatPressure(value?: number | null): string {
 }
 
 export const SENSOR_CONFIG = {
-	T0: { label: 'T0 (Пар)', color: '#e0f2fe', enabled: true },
-	T1: { label: 'T1 (2/3)', color: '#7dd3fc', enabled: true },
+	T0: { label: 'T0 (Пар)', color: '#7dd3fc', enabled: true },
+	T1: { label: 'T1 (2/3)', color: '#993333', enabled: true },
 	T2: { label: 'T2 (A)', color: '#fdba74', enabled: true },
 	T3: { label: 'T3 (B)', color: '#fb923c', enabled: true }
 } as const

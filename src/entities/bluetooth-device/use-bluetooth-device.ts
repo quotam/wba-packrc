@@ -6,7 +6,7 @@ import { ReceivedData } from '@front/kernel/domain/types'
 
 import { parsePacket } from './parser'
 
-const UI_UPDATE_THROTTLE_MS = 100 // Update UI max 10 times per second
+const UI_UPDATE_THROTTLE_MS = 400 // Update UI max ~3-4 times per second for better mobile performance
 
 const COMMON_SERIAL_SERVICES = [
 	'0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10, HC-08 modules
@@ -18,6 +18,17 @@ interface DiscoveredCharacteristics {
 	service: BluetoothRemoteGATTService
 	txChar: BluetoothRemoteGATTCharacteristic // For receiving data (notify)
 	rxChar: BluetoothRemoteGATTCharacteristic // For sending data (write)
+}
+
+const sanitizeNumber = (value: number): number => {
+	if (!Number.isFinite(value) || Number.isNaN(value)) {
+		return 0
+	}
+	return value
+}
+
+const sanitizeNumberArray = (arr: number[]): number[] => {
+	return arr.map(sanitizeNumber)
 }
 
 export function useBluetoothDevice() {
@@ -33,17 +44,48 @@ export function useBluetoothDevice() {
 	const lastUpdateTimeRef = useRef<number>(0)
 	const pendingDataRef = useRef<Partial<ReceivedData> | null>(null)
 	const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
+	const rafHandleRef = useRef<number | null>(null)
 
 	const updateReceivedData = useCallback((newData: Partial<ReceivedData>) => {
+		// Validate and sanitize incoming data
+		const sanitizedData: Partial<ReceivedData> = {}
+
+		for (const [key, value] of Object.entries(newData)) {
+			//TODO: replace this shit
+			if (Array.isArray(value)) {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				sanitizedData[key as keyof ReceivedData] = sanitizeNumberArray(value) as any
+			} else if (typeof value === 'number') {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				sanitizedData[key as keyof ReceivedData] = sanitizeNumber(value) as any
+			} else {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				sanitizedData[key as keyof ReceivedData] = value as any
+			}
+		}
+
+		// Merge with pending data
+		pendingDataRef.current = { ...pendingDataRef.current, ...sanitizedData }
+
 		const now = Date.now()
 		const timeSinceLastUpdate = now - lastUpdateTimeRef.current
 
-		pendingDataRef.current = { ...pendingDataRef.current, ...newData }
-
 		if (timeSinceLastUpdate >= UI_UPDATE_THROTTLE_MS) {
-			setReceivedData(prev => ({ ...prev, ...pendingDataRef.current }) as ReceivedData)
-			pendingDataRef.current = null
-			lastUpdateTimeRef.current = now
+			// Cancel any pending RAF
+			if (rafHandleRef.current !== null) {
+				cancelAnimationFrame(rafHandleRef.current)
+				rafHandleRef.current = null
+			}
+
+			// Use RAF for smoother updates on mobile
+			rafHandleRef.current = requestAnimationFrame(() => {
+				if (pendingDataRef.current) {
+					setReceivedData(prev => ({ ...prev, ...pendingDataRef.current }) as ReceivedData)
+					pendingDataRef.current = null
+					lastUpdateTimeRef.current = Date.now()
+				}
+				rafHandleRef.current = null
+			})
 
 			if (updateTimerRef.current) {
 				clearTimeout(updateTimerRef.current)
@@ -52,11 +94,19 @@ export function useBluetoothDevice() {
 		} else if (!updateTimerRef.current) {
 			const delay = UI_UPDATE_THROTTLE_MS - timeSinceLastUpdate
 			updateTimerRef.current = setTimeout(() => {
-				if (pendingDataRef.current) {
-					setReceivedData(prev => ({ ...prev, ...pendingDataRef.current }) as ReceivedData)
-					pendingDataRef.current = null
-					lastUpdateTimeRef.current = Date.now()
+				if (rafHandleRef.current !== null) {
+					cancelAnimationFrame(rafHandleRef.current)
+					rafHandleRef.current = null
 				}
+
+				rafHandleRef.current = requestAnimationFrame(() => {
+					if (pendingDataRef.current) {
+						setReceivedData(prev => ({ ...prev, ...pendingDataRef.current }) as ReceivedData)
+						pendingDataRef.current = null
+						lastUpdateTimeRef.current = Date.now()
+					}
+					rafHandleRef.current = null
+				})
 				updateTimerRef.current = null
 			}, delay)
 		}
@@ -74,18 +124,54 @@ export function useBluetoothDevice() {
 
 			bufferRef.current += text
 
-			const packets = bufferRef.current.split('\r')
-			bufferRef.current = packets.pop() || ''
+			// Batch parsed data to reduce update calls
+			const batchedData: Partial<ReceivedData> = {}
+			let hasData = false
 
-			for (const packet of packets) {
+			// Find complete packets between < and >
+			let startIdx = bufferRef.current.indexOf('<')
+
+			while (startIdx !== -1) {
+				const endIdx = bufferRef.current.indexOf('>', startIdx)
+
+				if (endIdx === -1) {
+					// Incomplete packet, keep in buffer starting from <
+					bufferRef.current = bufferRef.current.substring(startIdx)
+					break
+				}
+
+				// Extract packet content between < and > (excluding delimiters)
+				const packet = bufferRef.current.substring(startIdx + 1, endIdx)
+
 				if (packet.length > 0) {
-					const parsed = parsePacket(packet.trim().replace('<', '').replace('>', ''))
-					if (parsed) {
-						updateReceivedData(parsed)
+					try {
+						const parsed = parsePacket(packet.trim())
+						if (parsed) {
+							// Merge into batched data instead of calling update for each packet
+							Object.assign(batchedData, parsed)
+							hasData = true
+						}
+					} catch (error) {
+						console.error('Error parsing packet:', packet, error)
 					}
 				}
+
+				// Move to next potential packet
+				bufferRef.current = bufferRef.current.substring(endIdx + 1)
+				startIdx = bufferRef.current.indexOf('<')
 			}
 
+			// If no < found, clear buffer (no valid packet start)
+			if (startIdx === -1 && bufferRef.current.indexOf('>') === -1) {
+				bufferRef.current = ''
+			}
+
+			// Single update call with all batched data
+			if (hasData) {
+				updateReceivedData(batchedData)
+			}
+
+			// Prevent buffer overflow
 			if (bufferRef.current.length > 1000) {
 				console.warn('Buffer overflow, clearing')
 				bufferRef.current = ''
@@ -101,6 +187,11 @@ export function useBluetoothDevice() {
 		txCharacteristicRef.current = null
 		rxCharacteristicRef.current = null
 		bufferRef.current = ''
+
+		if (rafHandleRef.current !== null) {
+			cancelAnimationFrame(rafHandleRef.current)
+			rafHandleRef.current = null
+		}
 
 		if (updateTimerRef.current) {
 			clearTimeout(updateTimerRef.current)
@@ -270,6 +361,11 @@ export function useBluetoothDevice() {
 		rxCharacteristicRef.current = null
 		bufferRef.current = ''
 
+		if (rafHandleRef.current !== null) {
+			cancelAnimationFrame(rafHandleRef.current)
+			rafHandleRef.current = null
+		}
+
 		if (updateTimerRef.current) {
 			clearTimeout(updateTimerRef.current)
 			updateTimerRef.current = null
@@ -309,6 +405,9 @@ export function useBluetoothDevice() {
 
 	useEffect(() => {
 		return () => {
+			if (rafHandleRef.current !== null) {
+				cancelAnimationFrame(rafHandleRef.current)
+			}
 			if (updateTimerRef.current) {
 				clearTimeout(updateTimerRef.current)
 			}
