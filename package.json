@@ -1,7 +1,8 @@
 {
 	"name": "wba-packrc",
-	"version": "0.1.1.beta",
+	"version": "0.1.2.beta",
 	"private": true,
+	"license": "MIT",
 	"scripts": {
 		"d": "next dev --turbopack",
 		"dev": "next dev --experimental-https",

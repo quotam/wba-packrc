@@ -2,6 +2,7 @@ import type React from 'react'
 
 import Link from 'next/link'
 
+import { APP_INFO } from '@front/shared/config/publicConfig'
 import { Button } from '@front/shared/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@front/shared/ui/card'
 import { Separator } from '@front/shared/ui/separator'
@@ -280,7 +281,8 @@ export default function PrivacyPage() {
 					<CardContent>
 						<p className="text-muted-foreground">
 							Если у вас есть вопросы о политике конфиденциальности или о том, как мы обрабатываем ваши
-							данные, пожалуйста, свяжитесь с нами через форму обратной связи на сайте.
+							данные, пожалуйста, свяжитесь с нами через{' '}
+							<Link href={APP_INFO.repoUrl}>pепозиторий проекта на github</Link>.
 						</p>
 					</CardContent>
 				</Card>

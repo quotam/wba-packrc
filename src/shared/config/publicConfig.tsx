@@ -1,9 +1,8 @@
-export const PLACEHOLDER_IMAGE = '/placeholder.svg'
-
 export const APP_INFO = {
 	name: 'Distiler Monitor',
 	mail: '',
-	domain: ''
+	domain: '',
+	repoUrl: 'https://github.com/quotam/wba-packrc'
 }
 
 export const NAVIGATION = {
@@ -21,6 +20,10 @@ export const NAVIGATION = {
 		{
 			title: 'Конфиденциальность',
 			href: '/privacy'
+		},
+		{
+			title: 'Исходный код',
+			href: APP_INFO.repoUrl
 		}
 	]
 }
