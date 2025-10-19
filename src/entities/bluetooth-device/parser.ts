@@ -190,7 +190,6 @@ export const parsePacket = (data: string) => {
 		return null
 	}
 
-	console.log('parsePacket data: ' + data)
 	const prefix = data[0]
 
 	try {
