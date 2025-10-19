@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { ReceivedData } from '@front/kernel/domain/types'
+import type { ReceivedData } from '@front/kernel/domain/types'
 
 import { parsePacket } from './parser'
 
@@ -143,6 +143,17 @@ export function useBluetoothDevice() {
 				// Extract packet content between < and > (excluding delimiters)
 				const packet = bufferRef.current.substring(startIdx + 1, endIdx)
 
+				if (packet.includes('<') || packet.includes('>')) {
+					console.warn(
+						'Corrupted packet detected (contains nested delimiters), discarding:',
+						packet.substring(0, 50)
+					)
+					// Move past this corrupted packet and continue
+					bufferRef.current = bufferRef.current.substring(endIdx + 1)
+					startIdx = bufferRef.current.indexOf('<')
+					continue
+				}
+
 				if (packet.length > 0) {
 					try {
 						const parsed = parsePacket(packet.trim())
@@ -152,7 +163,7 @@ export function useBluetoothDevice() {
 							hasData = true
 						}
 					} catch (error) {
-						console.error('Error parsing packet:', packet, error)
+						console.error('Error parsing packet:', packet.substring(0, 50), error)
 					}
 				}
 
@@ -171,9 +182,8 @@ export function useBluetoothDevice() {
 				updateReceivedData(batchedData)
 			}
 
-			// Prevent buffer overflow
-			if (bufferRef.current.length > 1000) {
-				console.warn('Buffer overflow, clearing')
+			if (bufferRef.current.length > 500) {
+				console.warn('Buffer overflow detected, clearing buffer')
 				bufferRef.current = ''
 			}
 		},

@@ -1,4 +1,4 @@
-import { ReceivedData } from '@front/kernel/domain/types'
+import type { ReceivedData } from '@front/kernel/domain/types'
 
 const safeParseInt = (str: string, radix = 16): number => {
 	const value = Number.parseInt(str, radix)
@@ -97,7 +97,12 @@ const parseTPacket = (data: string): Partial<ReceivedData> => {
 	const payload = data.substring(2)
 
 	if (payload.length < 76) {
-		console.warn('T packet too short:', payload.length)
+		console.warn('T packet too short:', payload.length, 'expected 76')
+		return {}
+	}
+
+	if (payload.length > 76) {
+		console.warn('T packet too long:', payload.length, 'expected 76 - packet corrupted, discarding')
 		return {}
 	}
 
@@ -185,19 +190,20 @@ export const parsePacket = (data: string) => {
 		return null
 	}
 
+	console.log('parsePacket data: ' + data)
 	const prefix = data[0]
 
 	try {
 		if (prefix === 'W') {
-			return parseWPacket(data)
+			// return parseWPacket(data)
 		} else if (prefix === 'T') {
 			return parseTPacket(data)
 		} else if (prefix === 'U') {
-			return parseUPacket(data)
+			// return parseUPacket(data)
 		} else if (prefix === 'V') {
-			return parseVPacket(data)
+			// return parseVPacket(data)
 		} else if (prefix === 'Z') {
-			return parseZPacket(data)
+			// return parseZPacket(data)
 		}
 	} catch (error) {
 		console.error('Error parsing packet:', error, 'Data:', data)

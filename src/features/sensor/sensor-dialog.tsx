@@ -68,7 +68,7 @@ export function SensorConfigDialog({
 	const handleIncrement = () => {
 		const currentBound = Number(margin)
 		if (currentBound !== undefined && currentBound >= -55 && currentBound <= 127) {
-			const newValue = currentBound + 10
+			const newValue = currentBound + 0.0065
 			const formatted = Math.max(-55, Math.min(127, newValue)).toFixed(2)
 			setMargin(formatted)
 		}
@@ -77,7 +77,7 @@ export function SensorConfigDialog({
 	const handleDecrement = () => {
 		const currentBound = Number(margin)
 		if (margin !== undefined && currentBound >= -55 && currentBound <= 127) {
-			const newValue = currentBound - 10
+			const newValue = currentBound - 0.0065
 			const formatted = Math.max(-55, Math.min(127, newValue)).toFixed(2)
 			setMargin(formatted)
 		}
