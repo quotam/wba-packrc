@@ -195,15 +195,15 @@ export const parsePacket = (data: string) => {
 
 	try {
 		if (prefix === 'W') {
-			// return parseWPacket(data)
+			return parseWPacket(data)
 		} else if (prefix === 'T') {
 			return parseTPacket(data)
 		} else if (prefix === 'U') {
-			// return parseUPacket(data)
+			return parseUPacket(data)
 		} else if (prefix === 'V') {
-			// return parseVPacket(data)
+			return parseVPacket(data)
 		} else if (prefix === 'Z') {
-			// return parseZPacket(data)
+			return parseZPacket(data)
 		}
 	} catch (error) {
 		console.error('Error parsing packet:', error, 'Data:', data)
