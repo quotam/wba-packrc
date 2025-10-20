@@ -3,7 +3,6 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 
 import { Button } from '@front/shared/ui/button'
-import { useMutation } from '@tanstack/react-query'
 import { Home, RefreshCcw } from 'lucide-react'
 
 import { ClientErrorHandleAction } from '../action/errorHandler'
@@ -15,13 +14,9 @@ export default function ErrorPage({
 	error: Error & { digest?: string }
 	reset: () => void
 }) {
-	const { mutate } = useMutation({
-		mutationFn: (err: string) => ClientErrorHandleAction(err)
-	})
-
 	useEffect(() => {
-		mutate(JSON.stringify(error))
-	}, [error, mutate])
+		ClientErrorHandleAction(JSON.stringify(error))
+	}, [error])
 
 	return (
 		<div className="w-svw h-svh flex items-center justify-center">
