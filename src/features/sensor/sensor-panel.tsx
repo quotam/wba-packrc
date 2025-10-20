@@ -39,7 +39,7 @@ export const SensorPanel = memo(
 			<div
 				onClick={onClick}
 				className={cn(
-					'rounded-lg bg-background flex flex-col gpa-2 sm:flex-row flex-wrap border p-4 sm:p-2 xs:p-1',
+					'rounded-lg bg-background flex flex-col gpa-2 sm:flex-row flex-wrap border p-4 sm:p-2 xs:p-1 cursor-pointer',
 					isActive && 'ring-2 ring-red-500'
 					// !isValid && 'sm:hidden'
 				)}

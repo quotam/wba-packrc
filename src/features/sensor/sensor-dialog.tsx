@@ -1,3 +1,4 @@
+// SensorConfigDialog.tsx
 'use client'
 
 import type React from 'react'
@@ -6,10 +7,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@front/shared/ui/button'
 import { Card, CardContent } from '@front/shared/ui/card'
 import { Checkbox } from '@front/shared/ui/checkbox'
-import { Input } from '@front/shared/ui/input'
 import { Label } from '@front/shared/ui/label'
+import { MarginInputWithControls } from '@front/shared/ui/marginInput'
 import { SuperModal } from '@front/shared/ui/superModal'
-import { Copy, Minus, Plus } from 'lucide-react'
+
+// SensorConfigDialog.tsx
+
+// SensorConfigDialog.tsx
 
 interface SensorConfigDialogProps {
 	open: boolean
@@ -99,64 +103,27 @@ export function SensorConfigDialog({
 			setOpen={onOpenChange}
 			title={`Настройка датчика ${sensorName}`}
 			content={
-				<div className="space-y-4">
+				<div className="space-y-4 sm:space-y-2">
 					{/* Current Temperature Display */}
-					<Card>
-						<CardContent className="pt-4">
-							<div className="text-center">
-								<div className="text-sm text-slate-400 mb-1">Текущая температура</div>
-								<div className="text-3xl font-bold text-blue-400 font-mono">
-									{currentValue !== undefined && currentValue >= -55 && currentValue <= 127
-										? currentValue.toFixed(2)
-										: '----'}
-									<span className="text-lg ml-1">°C</span>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
+					<div className="text-center bg-secondary p-2 rounded-b-lg">
+						<div className="text-sm text-slate-400 mb-1">Текущая температура</div>
+						<div className="text-3xl font-bold text-blue-400 font-mono">
+							{currentValue !== undefined && currentValue >= -55 && currentValue <= 127
+								? currentValue.toFixed(2)
+								: '----'}
+							<span className="text-lg ml-1">°C</span>
+						</div>
+					</div>
 
 					{/* Margin Input with Controls */}
-					<div className="space-y-2">
-						<Label>Порог срабатывания (°C)</Label>
-						<div className="flex gap-2">
-							<Button
-								type="button"
-								variant="secondary"
-								size="icon"
-								onClick={handleCopyTemp}
-								className="shrink-0"
-								title="Копировать текущую температуру + 0.125°C"
-							>
-								<Copy className="w-4 h-4" />
-							</Button>
-							<Input
-								ref={inputRef}
-								value={margin}
-								onChange={e => setMargin(e.target.value)}
-								className="font-mono text-lg"
-								placeholder="-55.00 ... 127.00"
-							/>
-							<Button
-								type="button"
-								variant="secondary"
-								size="icon"
-								onClick={handleDecrement}
-								className="shrink-0"
-							>
-								<Minus className="w-4 h-4" />
-							</Button>
-							<Button
-								type="button"
-								variant="secondary"
-								size="icon"
-								onClick={handleIncrement}
-								className="shrink-0"
-							>
-								<Plus className="w-4 h-4" />
-							</Button>
-						</div>
-						<p className="text-xs text-slate-400">Диапазон: -55.00 до 127.00°C</p>
-					</div>
+					<MarginInputWithControls
+						value={margin}
+						onChange={setMargin}
+						onCopy={handleCopyTemp}
+						onIncrement={handleIncrement}
+						onDecrement={handleDecrement}
+						inputRef={inputRef}
+					/>
 
 					{/* Reaction Settings */}
 					<Card>
@@ -167,7 +134,7 @@ export function SensorConfigDialog({
 									checked={reactionOn}
 									onCheckedChange={checked => setReactionOn(checked as boolean)}
 								/>
-								<Label htmlFor="reaction-on" className="font-semibold cursor-pointer">
+								<Label htmlFor="reaction-on" className="font-bold cursor-pointer">
 									Включить реакцию на превышение порога
 								</Label>
 							</div>
