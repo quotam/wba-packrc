@@ -2,7 +2,12 @@
 
 import { useCallback } from 'react'
 
-import { COMMON_SERIAL_SERVICES, DiscoveredCharacteristics } from '@front/shared/lib/utils'
+import {
+	COMMON_RX_CHARACTERISTICS,
+	COMMON_SERIAL_SERVICES,
+	COMMON_TX_CHARACTERISTICS,
+	type DiscoveredCharacteristics
+} from '@front/shared/lib/utils'
 
 export function useBluetoothConnection() {
 	const discoverSerialCharacteristics = useCallback(
@@ -14,10 +19,42 @@ export function useBluetoothConnection() {
 				let txChar: BluetoothRemoteGATTCharacteristic | null = null
 				let rxChar: BluetoothRemoteGATTCharacteristic | null = null
 
-				// Look for characteristics with the right properties
+				// Strategy 1: Try to find characteristics by known UUIDs
+				for (const char of characteristics) {
+					const uuid = char.uuid.toLowerCase()
+
+					// Check if this is a known TX characteristic
+					if (COMMON_TX_CHARACTERISTICS.some(txUuid => uuid === txUuid.toLowerCase())) {
+						if (char.properties.notify) {
+							txChar = char
+							console.log(`Found known TX characteristic: ${char.uuid}`)
+						}
+					}
+
+					// Check if this is a known RX characteristic
+					if (COMMON_RX_CHARACTERISTICS.some(rxUuid => uuid === rxUuid.toLowerCase())) {
+						if (char.properties.write || char.properties.writeWithoutResponse) {
+							rxChar = char
+							console.log(`Found known RX characteristic: ${char.uuid}`)
+						}
+					}
+				}
+
+				// Strategy 2: If we found both by UUID, return them
+				if (txChar && rxChar) {
+					console.log('Successfully discovered serial characteristics by UUID')
+					return { service, txChar, rxChar }
+				}
+
+				// Strategy 3: Fall back to property-based detection
+				console.log('Falling back to property-based detection')
+				txChar = null
+				rxChar = null
+
 				for (const char of characteristics) {
 					console.log(`Characteristic ${char.uuid}:`, {
 						notify: char.properties.notify,
+						read: char.properties.read,
 						write: char.properties.write,
 						writeWithoutResponse: char.properties.writeWithoutResponse
 					})
@@ -35,11 +72,25 @@ export function useBluetoothConnection() {
 					}
 				}
 
+				// Strategy 4: For some devices, TX and RX might be the same characteristic
+				if (txChar && !rxChar) {
+					if (txChar.properties.write || txChar.properties.writeWithoutResponse) {
+						rxChar = txChar
+						console.log('Using same characteristic for both TX and RX')
+					}
+				} else if (rxChar && !txChar) {
+					if (rxChar.properties.notify) {
+						txChar = rxChar
+						console.log('Using same characteristic for both TX and RX')
+					}
+				}
+
 				if (txChar && rxChar) {
-					console.log('Successfully discovered serial characteristics')
+					console.log('Successfully discovered serial characteristics by properties')
 					return { service, txChar, rxChar }
 				}
 
+				console.log('Could not find suitable characteristics in this service')
 				return null
 			} catch (error) {
 				console.error(`Error discovering characteristics for service ${service.uuid}:`, error)
@@ -53,22 +104,22 @@ export function useBluetoothConnection() {
 		async (server: BluetoothRemoteGATTServer): Promise<DiscoveredCharacteristics | null> => {
 			console.log('Starting auto-discovery of serial service...')
 
-			// First, try common serial service UUIDs
+			// Strategy 1: Try common serial service UUIDs
 			for (const serviceUuid of COMMON_SERIAL_SERVICES) {
 				try {
 					console.log(`Trying known serial service: ${serviceUuid}`)
 					const service = await server.getPrimaryService(serviceUuid)
 					const discovered = await discoverSerialCharacteristics(service)
 					if (discovered) {
-						console.log(`Found working serial service: ${serviceUuid}`)
+						console.log(`✓ Found working serial service: ${serviceUuid}`)
 						return discovered
 					}
 				} catch (error) {
-					console.log(`Service ${serviceUuid} not available`, error)
+					console.log(`Service ${serviceUuid} not available`)
 				}
 			}
 
-			// If common services didn't work, scan all available services
+			// Strategy 2: Scan all available services
 			console.log('Scanning all available services...')
 			try {
 				const services = await server.getPrimaryServices()
@@ -78,7 +129,7 @@ export function useBluetoothConnection() {
 					console.log(`Checking service: ${service.uuid}`)
 					const discovered = await discoverSerialCharacteristics(service)
 					if (discovered) {
-						console.log(`Found working serial service: ${service.uuid}`)
+						console.log(`✓ Found working serial service: ${service.uuid}`)
 						return discovered
 					}
 				}
@@ -86,7 +137,7 @@ export function useBluetoothConnection() {
 				console.error('Error scanning services:', error)
 			}
 
-			console.error('Could not find suitable serial characteristics')
+			console.error('Could not find suitable serial characteristics in any service')
 			return null
 		},
 		[discoverSerialCharacteristics]
